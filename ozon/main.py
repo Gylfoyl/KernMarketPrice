@@ -9,30 +9,26 @@ from selenium.webdriver.support.ui import WebDriverWait
 from functions import page_down, collect_product_info
 
 
-def get_products_links(item_name='наушники hyperx'):
+def get_products_links(item_name):
     driver = uc.Chrome()
     driver.implicitly_wait(5)
-
+    
     driver.get(url='https://ozon.ru')
     time.sleep(2)
-
+    
     find_input = driver.find_element(By.NAME, 'text')
     find_input.clear()
     find_input.send_keys(item_name)
     time.sleep(2)
-
+    
     find_input.send_keys(Keys.ENTER)
     time.sleep(2)
-
-    current_url = f'{driver.current_url}&sorting=rating'
-    driver.get(url=current_url)
+    
+    #page_down(driver=driver)
     time.sleep(2)
-
-    # page_down(driver=driver)
-    time.sleep(2)
-
+    
     try:
-        find_links = driver.find_elements(By.CLASS_NAME, 'tile-hover-target')
+        find_links = driver.find_elements(By.CLASS_NAME, 'tile-clickable-element')
         products_urls = list(set([f'{link.get_attribute("href")}' for link in find_links]))
 
         print('[+] Ссылки на товары собраны!')
@@ -48,7 +44,7 @@ def get_products_links(item_name='наушники hyperx'):
         json.dump(products_urls_dict, file, indent=4, ensure_ascii=False)
 
     time.sleep(2)
-
+    
     products_data = []
 
     for url in products_urls:
@@ -66,7 +62,7 @@ def get_products_links(item_name='наушники hyperx'):
 
 def main():
     print('[INFO] Сбор данных начался. Пожалуйста ожидайте...')
-    get_products_links(item_name='наушники hyperx')
+    get_products_links(item_name='айфон 15 про макс')
     print('[INFO] Работа выполнена успешно!')
 
 
