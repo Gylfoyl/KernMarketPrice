@@ -1,7 +1,14 @@
 import time as tm
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
-
+import json
+import sys
+import time
+import undetected_chromedriver as uc 
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC 
+from selenium.webdriver.support.ui import WebDriverWait
+from urllib.parse import quote
 
 def page_down(driver):
     driver.execute_script('''
@@ -44,7 +51,18 @@ def collect_product_info(driver, url=''):
 
     product_name = soup.find('div', attrs={"data-widget": 'webProductHeading'}).find(
         'h1').text.strip().replace('\t', '').replace('\n', ' ')
-
+    image_url = ''
+    try:
+        img_tag = soup.find('img')
+        if img_tag:
+            image_url = img_tag.get('src') or ''
+            if not image_url:
+                srcset = img_tag.get('srcset') or ''
+                if srcset:
+                    # берём первую ссылку из srcset
+                    image_url = srcset.split()[0]
+    except:
+        image_url = ''
     # product_id
     # try:
     #     product_id = soup.find('div', string=re.compile(
@@ -98,19 +116,61 @@ def collect_product_info(driver, url=''):
         product_discount_price = card_price_div[1].text.strip()
 
     product_data = (
-        {
-            'product_id': product_id,
-            'product_name': product_name,
-            'product_ozon_card_price': product_ozon_card_price,
-            'product_discount_price': product_discount_price,
-            'product_base_price': product_base_price,
-            'product_statistic': product_statistic,
-            'product_stars': product_stars,
-            'product_reviews': product_reviews,
-        }
-    )
+    {
+        'product_url': url,
+        'image_url': image_url,
+        'product_id': product_id,
+        'product_name': product_name,
+        'product_discount_price': product_discount_price,
+        'product_base_price': product_base_price,
+        'product_statistic': product_statistic,
+        'product_stars': product_stars,
+        'product_reviews': product_reviews,
+    }
+)
 
     driver.close()
     driver.switch_to.window(driver.window_handles[0])
 
     return product_data
+
+
+def get_products_links(item_name):
+    options = uc.ChromeOptions()
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--start-maximized")
+
+    driver = uc.Chrome(options=options)
+    driver.implicitly_wait(5)
+    link = 'https://ozon.ru/search/?text=' + quote(item_name) + '&sorting=price' #сделал сразу переход по запросу с сортировкой по цене
+    driver.get(url=link)
+    wait = WebDriverWait(driver, 15)
+    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "tile-clickable-element")))
+    try:
+        find_links = driver.find_elements(By.CLASS_NAME, 'tile-clickable-element')
+        products_urls = list(set([f'{link.get_attribute("href")}' for link in find_links]))
+
+        print('[+] Ссылки на товары собраны!')
+    except:
+        print('[!] Что-то сломалось при сборе ссылок на товары!')
+
+    products_urls_dict = {}
+
+    for k, v in enumerate(products_urls):
+        products_urls_dict.update({k: v})
+
+    with open('products_urls_dict.json', 'w', encoding='utf-8') as file:
+        json.dump(products_urls_dict, file, indent=4, ensure_ascii=False)    
+    products_data = []
+
+    for url in products_urls:
+        data = collect_product_info(driver=driver, url=url)
+        print(f'[+] Собрал данные товара с id: {data.get("product_id")}')
+        time.sleep(2)
+        products_data.append(data)
+
+    with open('PRODUCTS_DATA.json', 'w', encoding='utf-8') as file:
+        json.dump(products_data, file, indent=4, ensure_ascii=False)
+
+    driver.close()
+    driver.quit()
