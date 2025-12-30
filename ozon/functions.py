@@ -95,14 +95,14 @@ def collect_product_info(driver, url=''):
             'div', attrs={"data-widget": "webPrice"}).findAll('span')
 
         product_base_price = card_price_div[0].text.strip()
-        product_discount_price = card_price_div[1].text.strip()
+        #product_discount_price = card_price_div[1].text.strip()
 
     product_data = (
         {
             'product_id': product_id,
             'product_name': product_name,
             'product_ozon_card_price': product_ozon_card_price,
-            'product_discount_price': product_discount_price,
+            #'product_discount_price': product_discount_price,
             'product_base_price': product_base_price,
             'product_statistic': product_statistic,
             'product_stars': product_stars,

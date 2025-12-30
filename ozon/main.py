@@ -62,7 +62,7 @@ def get_products_links(item_name):
 
 def main():
     print('[INFO] Сбор данных начался. Пожалуйста ожидайте...')
-    get_products_links(item_name='айфон 15 про макс')
+    get_products_links(item_name='видеокарта 4090')
     print('[INFO] Работа выполнена успешно!')
 
 
