@@ -1,7 +1,7 @@
 package ozon
 
 import (
-	"encoding/json"
+	"agregator/adapters/models"
 	"fmt"
 	"html"
 	"io"
@@ -125,18 +125,6 @@ func Ozon(query string) bool {
 	return false
 }
 
-type Product struct {
-	Link             string `json:"product_url:"`
-	IMG              string `json:"image_url:"`
-	ProductID        string `json:"product_id"`
-	ProductName      string `json:"product_name"`
-	DiscountPrice    string `json:"product_discount_price"` // цена со скидкой
-	BasePrice        string `json:"product_base_price"`     // оригинальная цена
-	ProductStatistic string `json:"product_statistic"`      // средняя оценка + количество отзывов
-	ProductStars     string `json:"product_stars"`          // средняя оценка
-	ProductReviews   string `json:"product_reviews"`        // количество отзывов
-}
-
 func getMainStateText(item gjson.Result, stateType string) gjson.Result {
 	var found gjson.Result
 	item.Get("mainState").ForEach(func(_, st gjson.Result) bool {
@@ -159,7 +147,7 @@ func normalizeText(s string) string {
 	return s
 }
 
-func Parse() {
+func Parse() []models.Product {
 	data, err := os.ReadFile("ozon.json")
 	if err != nil {
 		panic(err)
@@ -177,7 +165,7 @@ func Parse() {
 	})
 	if tileKey == "" {
 		fmt.Println("tileGridDesktop-* not found")
-		return
+		return []models.Product{}
 	}
 
 	tileStr := root.Get("widgetStates." + tileKey).String()
@@ -186,12 +174,12 @@ func Parse() {
 	items := tile.Get("items")
 	if !items.Exists() || !items.IsArray() {
 		fmt.Println("items not found or not array")
-		return
+		return []models.Product{}
 	}
 
 	fmt.Println("items:", len(items.Array()))
 
-	products := make([]Product, 0, len(items.Array()))
+	var products []models.Product
 	items.ForEach(func(_, item gjson.Result) bool {
 		sku := item.Get("sku").String()
 		link := item.Get("action.link").String()
@@ -245,7 +233,7 @@ func Parse() {
 			statistic = stars + " • " + reviews
 		}
 
-		p := Product{
+		p := models.Product{
 			Link:             link,
 			IMG:              img,
 			ProductID:        sku,
@@ -261,14 +249,15 @@ func Parse() {
 		return true
 	})
 
-	out, err := json.MarshalIndent(products, "", "    ")
-	if err != nil {
-		panic(err)
-	}
+	return products
+	// out, err := json.MarshalIndent(products, "", "    ")
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	err = os.WriteFile("PRODUCTS_DATA.json", out, 0644)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("[+] Saved PRODUCTS_DATA.json:", len(products))
+	// err = os.WriteFile("PRODUCTS_DATA.json", out, 0644)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("[+] Saved PRODUCTS_DATA.json:", len(products))
 }

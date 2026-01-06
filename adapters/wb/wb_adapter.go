@@ -1,6 +1,7 @@
 package wb
 
 import (
+	"agregator/adapters/models"
 	"fmt"
 	"io"
 	"math/rand"
@@ -102,7 +103,7 @@ func Wildberries(query string) {
 	}
 }
 
-func Parse() {
+func Parse() []models.Product {
 	data, err := os.ReadFile("wb.json")
 	if err != nil {
 		panic(err)
@@ -112,17 +113,22 @@ func Parse() {
 	products := root.Get("products")
 	if !products.Exists() || !products.IsArray() {
 		fmt.Println("items not found or not array")
-		return
+		return []models.Product{}
 	}
 
+	var items []models.Product
 	products.ForEach(func(_, products gjson.Result) bool {
 		id := products.Get("id").Int()
 		link := "https://www.wildberries.ru/catalog/" + strconv.FormatInt(id, 10) + "/detail.aspx"
 		name := products.Get("name").String()
-		price := products.Get("sizes").Get("0").Get("price").Get("product").Int()
-		fmt.Println("Name:", name)
-		fmt.Println("URL:", link)
-		fmt.Println("Price: \n\n", price/100)
+		discprice := (products.Get("sizes").Get("0").Get("price").Get("product").Int()) / 100
+		baseprice := (products.Get("sizes").Get("0").Get("price").Get("basic").Int()) / 100
+		stars := products.Get("rating").String()
+		reviews := products.Get("feedbacks").String()
+		var statistic string
+		if stars != "" && reviews != "" {
+			statistic = stars + " • " + reviews
+		}
 		var pic string
 		for i := 0; i <= 30; i++ {
 			vol := id / 100000
@@ -140,7 +146,20 @@ func Parse() {
 				break
 			}
 		}
-		fmt.Println("Image:", pic)
+		p := models.Product{
+			Link:             link,
+			IMG:              pic,
+			ProductID:        strconv.Itoa(int(id)),
+			ProductName:      name,
+			DiscountPrice:    strconv.Itoa(int(discprice)),
+			BasePrice:        strconv.Itoa(int(baseprice)),
+			ProductStatistic: statistic,
+			ProductStars:     stars,
+			ProductReviews:   reviews,
+		}
+		items = append(items, p)
+
 		return true
 	})
+	return items
 }
