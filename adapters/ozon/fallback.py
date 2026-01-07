@@ -164,9 +164,11 @@ def get_products_links(item_name):
 
     
 def main():
-    
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No query provided"}, ensure_ascii=False))
+        sys.exit(1)
 
-    query = "macbook"
+    query = sys.argv[1]
 
     try:
         products_data = get_products_links(query)

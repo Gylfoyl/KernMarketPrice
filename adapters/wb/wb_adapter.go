@@ -2,13 +2,13 @@ package wb
 
 import (
 	"agregator/adapters/models"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 
@@ -46,13 +46,15 @@ func warmUp(client *http.Client) error {
 	return nil
 }
 
-func Wildberries(query string) {
+func wildberries(query string) ([]byte, error) {
 	apiUrl := "https://search.wb.ru/exactmatch/ru/common/v18/search?appType=1&curr=rub&dest=-1257786&lang=ru&page=1&query=" + url.QueryEscape(query) + "&resultset=catalog&sort=priceup&spp=30"
 	referer := "https://www.wildberries.ru/catalog/0/search.aspx?search=" + url.QueryEscape(query)
 
+	var body []byte
+
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("ошибка cookiejar:%w", err)
 	}
 
 	client := &http.Client{
@@ -64,12 +66,11 @@ func Wildberries(query string) {
 	}
 
 	if err := warmUp(client); err != nil {
-		fmt.Println("Warmup errors:", err)
-		return
+		return nil, fmt.Errorf("Warmup errors:%w", err)
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	for attempt := 0; attempt <= 30; attempt++ {
+	for attempt := 0; attempt <= 20; attempt++ {
 		req, err := http.NewRequest("GET", apiUrl, nil)
 		if err != nil {
 			fmt.Println("GET request err:", err)
@@ -82,7 +83,11 @@ func Wildberries(query string) {
 			continue
 		}
 
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("ошибка чтения resp.body")
+			continue
+		}
 		if resp.StatusCode != 200 {
 			resp.Body.Close()
 			sleepSecond := 2 * (1 << attempt)
@@ -92,28 +97,26 @@ func Wildberries(query string) {
 				if len(s) > 500 {
 					s = s[:500]
 				}
-				fmt.Println("last body snippet:", s)
+				fmt.Println("resp status code != 200. last body snippet:", s)
 			}
 			continue
 		}
-		fmt.Println("WB OK", resp.Status)
-		os.WriteFile("wb.json", body, 0644)
+		fmt.Println("WB OK\n", resp.Status)
 		resp.Body.Close()
 		break
 	}
+	return body, nil
 }
 
-func Parse() []models.Product {
-	data, err := os.ReadFile("wb.json")
+func Parse(query string) ([]models.Product, error) {
+	body, err := wildberries(query)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("ошибка сбора json WB:%w", err)
 	}
-
-	root := gjson.ParseBytes(data)
+	root := gjson.ParseBytes(body)
 	products := root.Get("products")
 	if !products.Exists() || !products.IsArray() {
-		fmt.Println("items not found or not array")
-		return []models.Product{}
+		return nil, errors.New("items not found or not array")
 	}
 
 	var items []models.Product
@@ -161,5 +164,5 @@ func Parse() []models.Product {
 
 		return true
 	})
-	return items
+	return items, nil
 }
