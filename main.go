@@ -100,19 +100,20 @@ func searchProducts(query string) ([]models.Product, error) {
 		defer wg.Done()
 		itemsOzon, errOzon = ozon.Parse(query)
 		if errOzon != nil {
+			fmt.Println("[OZON] стартую фолбэк: ")
 			cmd := exec.Command("python3", "./adapters/ozon/fallback.py", query)
 			output, err := cmd.Output()
 			if err != nil {
-				errOzon = fmt.Errorf("Ошибка запуска скрипта:%w", err)
+				errOzon = fmt.Errorf("[OZON] Ошибка запуска скрипта:%w", err)
 			}
 			if len(output) == 0 {
-				errOzon = fmt.Errorf("Скрипт вернул пустой вывод")
+				errOzon = fmt.Errorf("[OZON] Скрипт вернул пустой вывод")
 			}
 			err = json.Unmarshal(output, &itemsOzon)
 			if err != nil {
-				errOzon = fmt.Errorf("Не удалось десериализовать ozon:%w", err)
+				errOzon = fmt.Errorf("[OZON] Не удалось десериализовать %w", err)
 			}
-			fmt.Printf("Python фолбэк вернул %d товаров:", len(itemsOzon))
+			fmt.Printf("[OZON] Python фолбэк вернул %d товаров:", len(itemsOzon))
 		}
 	}()
 
@@ -121,7 +122,7 @@ func searchProducts(query string) ([]models.Product, error) {
 		defer wg.Done()
 		itemWB, errWB = wb.Parse(query)
 		if errWB != nil {
-			errWB = fmt.Errorf("Не удалось спарсить wb:%w", errWB)
+			errWB = fmt.Errorf("[WB] Не удалось спарсить wb:%w", errWB)
 		}
 	}()
 

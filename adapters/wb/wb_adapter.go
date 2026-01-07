@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -46,15 +45,14 @@ func warmUp(client *http.Client) error {
 	return nil
 }
 
+// json
 func wildberries(query string) ([]byte, error) {
 	apiUrl := "https://search.wb.ru/exactmatch/ru/common/v18/search?appType=1&curr=rub&dest=-1257786&lang=ru&page=1&query=" + url.QueryEscape(query) + "&resultset=catalog&sort=priceup&spp=30"
 	referer := "https://www.wildberries.ru/catalog/0/search.aspx?search=" + url.QueryEscape(query)
 
-	var body []byte
-
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка cookiejar:%w", err)
+		return nil, fmt.Errorf("[WB] ошибка cookiejar:%w", err)
 	}
 
 	client := &http.Client{
@@ -66,57 +64,58 @@ func wildberries(query string) ([]byte, error) {
 	}
 
 	if err := warmUp(client); err != nil {
-		return nil, fmt.Errorf("Warmup errors:%w", err)
+		return nil, fmt.Errorf("[WB] Warmup errors:%w", err)
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	for attempt := 0; attempt <= 20; attempt++ {
+	for attempt := 0; attempt <= 30; attempt++ {
+		fmt.Println("[WB] STEP:", attempt)
+		fmt.Println("[WB] URL:", apiUrl)
 		req, err := http.NewRequest("GET", apiUrl, nil)
 		if err != nil {
-			fmt.Println("GET request err:", err)
+			fmt.Println("[WB] GET request err:", err)
 			continue
 		}
 		setHeaders(req, referer)
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Println("Client error:", err)
+			fmt.Println("[WB] Client error:", err)
 			continue
 		}
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Println("ошибка чтения resp.body")
+			fmt.Println("[WB] ошибка чтения resp.body")
 			continue
 		}
-		if resp.StatusCode != 200 {
-			resp.Body.Close()
-			sleepSecond := 2 * (1 << attempt)
-			time.Sleep(time.Duration(sleepSecond) * time.Second)
-			if len(body) > 0 {
-				s := string(body)
-				if len(s) > 500 {
-					s = s[:500]
-				}
-				fmt.Println("resp status code != 200. last body snippet:", s)
-			}
-			continue
+
+		if resp.StatusCode == 200 {
+			fmt.Println("WB OK\n", resp.Status)
+			return body, nil
 		}
-		fmt.Println("WB OK\n", resp.Status)
 		resp.Body.Close()
-		break
+		time.Sleep(time.Second * 2)
+		if len(body) > 0 {
+			s := string(body)
+			if len(s) > 500 {
+				s = s[:1000]
+			}
+			fmt.Println("[WB] resp status code != 200. last body snippet:", s)
+		}
+		fmt.Println("WB unexpected status:", resp.Status)
+		resp.Body.Close()
 	}
-	return body, nil
+	return nil, errors.New("[WB]  не удалось получить данные")
 }
 
 func Parse(query string) ([]models.Product, error) {
 	body, err := wildberries(query)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка сбора json WB:%w", err)
+		return nil, fmt.Errorf("[WB] ошибка сбора json WB:%w", err)
 	}
 	root := gjson.ParseBytes(body)
 	products := root.Get("products")
 	if !products.Exists() || !products.IsArray() {
-		return nil, errors.New("items not found or not array")
+		return nil, errors.New("[WB] items not found or not array")
 	}
 
 	var items []models.Product

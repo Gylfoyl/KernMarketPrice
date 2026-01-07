@@ -45,6 +45,7 @@ func warmUp(client *http.Client) error {
 	return nil
 }
 
+// json
 func ozonResponse(query string) ([]byte, error) {
 	searchpath := "/search?text=" + url.QueryEscape(query) + "&sorting=price&page=1"
 	apiUrl := "https://api.ozon.ru/composer-api.bx/page/json/v2?url=" + url.QueryEscape(searchpath)
@@ -52,7 +53,7 @@ func ozonResponse(query string) ([]byte, error) {
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return nil, fmt.Errorf("cookiejar:%w", err)
+		return nil, fmt.Errorf("[OZON] cookiejar:%w", err)
 	}
 
 	client := &http.Client{
@@ -64,7 +65,7 @@ func ozonResponse(query string) ([]byte, error) {
 	}
 
 	if err := warmUp(client); err != nil {
-		return nil, fmt.Errorf("warmup: %w", err)
+		return nil, fmt.Errorf("[OZON] warmup: %w", err)
 	}
 
 	current := apiUrl
@@ -75,13 +76,13 @@ func ozonResponse(query string) ([]byte, error) {
 		time.Sleep(time.Duration(seconds) * time.Second)
 		req, err := http.NewRequest("GET", current, nil)
 		if err != nil {
-			return nil, fmt.Errorf("new request: %w", err)
+			return nil, fmt.Errorf("[OZON] new request: %w", err)
 		}
 
 		setHeaders(req, referer)
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("client do: %w", err)
+			return nil, fmt.Errorf("[OZON] client do: %w", err)
 		}
 
 		if resp.StatusCode == 301 || resp.StatusCode == 302 || resp.StatusCode == 303 || resp.StatusCode == 307 || resp.StatusCode == 308 {
@@ -89,7 +90,7 @@ func ozonResponse(query string) ([]byte, error) {
 			io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 			if loc == "" {
-				return nil, fmt.Errorf("redirect without location")
+				return nil, fmt.Errorf("[OZON] redirect without location")
 			}
 			if strings.HasPrefix(loc, "/") {
 				loc = "https://api.ozon.ru" + loc
@@ -104,14 +105,14 @@ func ozonResponse(query string) ([]byte, error) {
 		body, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if readErr != nil {
-			fmt.Println("read error:", readErr)
+			fmt.Println("[OZON] read error:", readErr)
 		}
 
 		if resp.StatusCode == 200 {
 			fmt.Println("OZON OK", resp.Status)
 			return body, nil
 		}
-		fmt.Println("Unexpected status:", resp.Status)
+		fmt.Println("[OZON] Unexpected status:", resp.Status)
 		if len(body) > 0 {
 			s := string(body)
 			if len(s) > 1000 {
@@ -120,7 +121,7 @@ func ozonResponse(query string) ([]byte, error) {
 			fmt.Println("Body snippet:\n", s)
 		}
 	}
-	return nil, errors.New("Ozon: не удалось получить данные")
+	return nil, errors.New("[OZON]  не удалось получить данные")
 
 }
 
@@ -149,7 +150,7 @@ func normalizeText(s string) string {
 func Parse(query string) ([]models.Product, error) {
 	ozon, err := ozonResponse(query)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка сбора json OZON:%w", err)
+		return nil, fmt.Errorf("[OZON] ошибка сбора json OZON:%w", err)
 	}
 
 	root := gjson.ParseBytes(ozon)
@@ -163,7 +164,7 @@ func Parse(query string) ([]models.Product, error) {
 		return true
 	})
 	if tileKey == "" {
-		return nil, fmt.Errorf("tileGridDesktop-* not found")
+		return nil, fmt.Errorf("[OZON] tileGridDesktop-* not found")
 	}
 
 	tileStr := root.Get("widgetStates." + tileKey).String()
@@ -171,7 +172,7 @@ func Parse(query string) ([]models.Product, error) {
 
 	items := tile.Get("items")
 	if !items.Exists() || !items.IsArray() {
-		return nil, fmt.Errorf("items not found or not array")
+		return nil, fmt.Errorf("[OZON] items not found or not array")
 	}
 
 	fmt.Println("items:", len(items.Array()))
