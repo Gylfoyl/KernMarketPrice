@@ -89,7 +89,7 @@ func wildberries(query string) ([]byte, error) {
 		}
 
 		if resp.StatusCode == 200 {
-			fmt.Println("WB OK\n", resp.Status)
+			fmt.Println("WB RESPONSE OK:\n", resp.Status)
 			return body, nil
 		}
 		resp.Body.Close()
@@ -131,23 +131,25 @@ func Parse(query string) ([]models.Product, error) {
 		if stars != "" && reviews != "" {
 			statistic = stars + " • " + reviews
 		}
-		var pic string
-		for i := 0; i <= 30; i++ {
-			vol := id / 100000
-			part := id / 1000
-			pic = "https://basket-" + strconv.Itoa(i) + ".wbbasket.ru" + "/vol" + strconv.FormatInt(vol, 10) + "/part" + strconv.FormatInt(part, 10) + "/" + strconv.FormatInt(id, 10) + "/images/big/1.webp"
+		fmt.Println("[WB] Пытаюсь собрать линку для изображения")
+		vol := id / 100000
+		part := id / 1000
+		host := id % 10
+		pic := fmt.Sprintf(
+			"https://basket-%d.wbbasket.ru/vol%d/part%d/%d/images/big/1.webp",
+			host, vol, part, id)
 
-			resp, err := http.Get(pic)
-			if err != nil {
-				continue
-			}
-			if resp.StatusCode != 200 {
-				resp.Body.Close()
-				continue
-			} else {
-				break
-			}
+		resp, err := http.Get(pic)
+		fmt.Println("[WB] послал запрос к изображению")
+		if err != nil {
+			fmt.Println("[WB] ошибка запроса к изображению:", err)
 		}
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+		} else {
+			fmt.Println("[WB] успех запроса к изображению")
+		}
+
 		p := models.Product{
 			Link:             link,
 			IMG:              pic,
@@ -160,8 +162,8 @@ func Parse(query string) ([]models.Product, error) {
 			ProductReviews:   reviews,
 		}
 		items = append(items, p)
-
 		return true
 	})
+	fmt.Println("[WB] items:", len(products.Array()))
 	return items, nil
 }

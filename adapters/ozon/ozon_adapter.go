@@ -28,6 +28,12 @@ func setHeaders(req *http.Request, referer string) {
 	if referer != "" {
 		req.Header.Set("Referer", referer)
 	}
+	req.Header.Set("Sec-Ch-Ua", `"Not_A Brand";v="99", "Google Chrome";v="119", "Chromium";v="119"`)
+	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+	req.Header.Set("Sec-Ch-Ua-Platform", "Windows")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Dnt", "1")
+
 }
 
 func warmUp(client *http.Client) error {
@@ -45,6 +51,8 @@ func warmUp(client *http.Client) error {
 	return nil
 }
 
+var globalCookie *cookiejar.Jar
+
 // json
 func ozonResponse(query string) ([]byte, error) {
 	searchpath := "/search?text=" + url.QueryEscape(query) + "&sorting=price&page=1"
@@ -55,13 +63,14 @@ func ozonResponse(query string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[OZON] cookiejar:%w", err)
 	}
+	globalCookie = jar
 
 	client := &http.Client{
 		Timeout: 15 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
-		Jar: jar,
+		Jar: globalCookie,
 	}
 
 	if err := warmUp(client); err != nil {
@@ -70,8 +79,8 @@ func ozonResponse(query string) ([]byte, error) {
 
 	current := apiUrl
 	for step := 0; step < 25; step++ {
-		fmt.Println("Step:", step)
-		fmt.Println("URL:", current)
+		fmt.Println("[OZON] Step:", step)
+		fmt.Println("[OZON] URL:", current)
 		seconds := rand.Intn(8) + 3
 		time.Sleep(time.Duration(seconds) * time.Second)
 		req, err := http.NewRequest("GET", current, nil)

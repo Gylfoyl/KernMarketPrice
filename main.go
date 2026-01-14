@@ -100,7 +100,7 @@ func searchProducts(query string) ([]models.Product, error) {
 		defer wg.Done()
 		itemsOzon, errOzon = ozon.Parse(query)
 		if errOzon != nil {
-			fmt.Println("[OZON] стартую фолбэк: ")
+			fmt.Println("[OZON] стартую фолбэк")
 			cmd := exec.Command("python3", "./adapters/ozon/fallback.py", query)
 			output, err := cmd.Output()
 			if err != nil {
@@ -138,8 +138,12 @@ func searchProducts(query string) ([]models.Product, error) {
 	}
 
 	sort.Slice(items, func(i, j int) bool {
-		pi, _ := strconv.Atoi(items[i].DiscountPrice)
-		pj, _ := strconv.Atoi(items[j].DiscountPrice)
+		cleanedI := strings.ReplaceAll(items[i].DiscountPrice, " ", "")
+		cleanedI = strings.ReplaceAll(items[i].DiscountPrice, "₽", "")
+		cleanedJ := strings.ReplaceAll(items[j].DiscountPrice, " ", "")
+		cleanedJ = strings.ReplaceAll(items[j].DiscountPrice, "₽", "")
+		pi, _ := strconv.Atoi(cleanedI)
+		pj, _ := strconv.Atoi(cleanedJ)
 		return pi < pj
 	})
 
@@ -149,29 +153,6 @@ func searchProducts(query string) ([]models.Product, error) {
 	}
 
 	return items, nil
-}
-
-func getProductsFromMemory(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("query")
-	query = normalizeQuery(query)
-	if query == "" {
-		http.Error(w, "Параметр query обязателен", http.StatusBadRequest)
-		return
-	}
-
-	products, err := getFromRedis(query)
-	if err == redis.Nil {
-		products = []models.Product{}
-	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(products)
-	if err != nil {
-		http.Error(w, "ошибка кодирования ответа", http.StatusInternalServerError)
-	}
 }
 
 func searchHandler(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +179,6 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	initRedis()
 	http.HandleFunc("/search", searchHandler)
-	http.HandleFunc("/products", getProductsFromMemory)
 	fmt.Println("Сервер запущен на :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
