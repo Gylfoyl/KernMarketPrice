@@ -21,6 +21,48 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+/* Программа реализует веб-сервер на Go для поиска товаров на маркетплейсах Ozon и Wildberries
+с использованием кэша Redis и возможностью fallback-парсинга через Python скрипт.
+
+Основные компоненты программы:
+
+1. Подключение к Redis:
+   - Через функцию initRedis() создаётся клиент Redis, который подключается к локальному серверу на порту 6379.
+   - Пытается подключиться несколько раз с интервалом в 2 секунды.
+   - Если подключение не удалось, программа продолжает работать, но без кэширования.
+
+2. Нормализация поискового запроса:
+   - Функция normalizeQuery() убирает лишние пробелы, приводит строку к нижнему регистру.
+   - Это позволяет одинаково обрабатывать запросы вроде " IPHONE  12 " и "iphone 12".
+
+3. Работа с Redis:
+   - saveToRedis() сохраняет список товаров в Redis в виде JSON на 1 час по нормализованному ключу запроса.
+   - getFromRedis() пытается получить список товаров из Redis. Если ключа нет — возвращает ошибку.
+
+4. Парсинг товаров (searchProducts):
+   - Сначала проверяется, есть ли данные в Redis. Если есть — возвращаются они.
+   - Если в кэше нет, данные собираются параллельно с Ozon и Wildberries с использованием goroutine и sync.WaitGroup.
+
+   - Ozon:
+     - Основной парсер: ozon.Parse(query).
+     - Если основной парсер падает, выполняется fallback через Python скрипт (fallback.py).
+     - Python скрипт возвращает JSON, который десериализуется в []models.Product.
+
+   - Wildberries:
+     - Парсер wb.Parse(query), ошибки логируются.
+
+   - После получения товаров:
+     - Объединяются результаты с Ozon и WB.
+     - Сортируются по цене (DiscountPrice) по возрастанию.
+     - Сохраняются в Redis для ускорения последующих запросов.
+
+5. HTTP обработчик searchHandler:
+   - Принимает GET-запрос на эндпоинт /search с параметром query.
+   - Нормализует query, вызывает searchProducts().
+   - Возвращает JSON с найденными товарами.
+   - В случае ошибки возвращает HTTP 400 (пустой или некорректный query) или 500 (ошибка поиска или парсинга).
+*/
+
 var (
 	ctx         = context.Background()
 	redisClient *redis.Client
@@ -44,7 +86,6 @@ func initRedis() {
 	log.Println("Работа без кэширования")
 }
 
-// нормализация запроса - не будет засорять бд. пример IPHONE    12 -> iphone 12
 func normalizeQuery(q string) string {
 	q = strings.TrimSpace(q)
 	q = strings.ToLower(q)
@@ -77,12 +118,11 @@ func getFromRedis(query string) ([]models.Product, error) {
 	return products, err
 }
 
-// парс
 func searchProducts(query string) ([]models.Product, error) {
 	query = normalizeQuery(query)
 	cachedProducts, err := getFromRedis(query)
 	if err == nil {
-		fmt.Printf("Использован кэш для запроса %s", query)
+		fmt.Printf("Использован кэш для запроса %s\n", query)
 		return cachedProducts, nil
 	}
 
@@ -95,7 +135,6 @@ func searchProducts(query string) ([]models.Product, error) {
 	)
 	wg.Add(2)
 
-	//ozon
 	go func() {
 		defer wg.Done()
 		itemsOzon, errOzon = ozon.Parse(query)
@@ -117,7 +156,6 @@ func searchProducts(query string) ([]models.Product, error) {
 		}
 	}()
 
-	//wb
 	go func() {
 		defer wg.Done()
 		itemWB, errWB = wb.Parse(query)
@@ -179,6 +217,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	initRedis()
 	http.HandleFunc("/search", searchHandler)
+	http.Handle("/", http.FileServer(http.Dir("web/dist")))
 	fmt.Println("Сервер запущен на :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
