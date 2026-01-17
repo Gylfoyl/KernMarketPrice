@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -45,7 +47,6 @@ func warmUp(client *http.Client) error {
 	return nil
 }
 
-// json
 func wildberries(query string) ([]byte, error) {
 	apiUrl := "https://search.wb.ru/exactmatch/ru/common/v18/search?appType=1&curr=rub&dest=-1257786&lang=ru&page=1&query=" + url.QueryEscape(query) + "&resultset=catalog&sort=priceup&spp=30"
 	referer := "https://www.wildberries.ru/catalog/0/search.aspx?search=" + url.QueryEscape(query)
@@ -55,8 +56,17 @@ func wildberries(query string) ([]byte, error) {
 		return nil, fmt.Errorf("[WB] ошибка cookiejar:%w", err)
 	}
 
+	wd, _ := os.Getwd()
+	path := filepath.Join(wd, "proxy.txt")
+	dat, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot read file proxy.txt: %v", err)
+	}
+	proxyURL, _ := url.Parse(string(dat))
+	transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Transport: transport,
+		Timeout:   15 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -134,9 +144,88 @@ func Parse(query string) ([]models.Product, error) {
 		fmt.Println("[WB] Пытаюсь собрать линку для изображения")
 		vol := id / 100000
 		part := id / 1000
-		host := id % 10
+		host := ""
+		switch {
+		case vol >= 0 && vol <= 143:
+			host = "01"
+		case vol <= 287:
+			host = "02"
+		case vol <= 431:
+			host = "03"
+		case vol <= 719:
+			host = "04"
+		case vol <= 1007:
+			host = "05"
+		case vol <= 1061:
+			host = "06"
+		case vol <= 1115:
+			host = "07"
+		case vol <= 1169:
+			host = "08"
+		case vol <= 1313:
+			host = "09"
+		case vol <= 1601:
+			host = "10"
+		case vol <= 1655:
+			host = "11"
+		case vol <= 1919:
+			host = "12"
+		case vol <= 2045:
+			host = "13"
+		case vol <= 2189:
+			host = "14"
+		case vol <= 2405:
+			host = "15"
+		case vol <= 2621:
+			host = "16"
+		case vol <= 2837:
+			host = "17"
+		case vol <= 3053:
+			host = "18"
+		case vol <= 3269:
+			host = "19"
+		case vol <= 3485:
+			host = "20"
+		case vol <= 3701:
+			host = "21"
+		case vol <= 3917:
+			host = "22"
+		case vol <= 4133:
+			host = "23"
+		case vol <= 4349:
+			host = "24"
+		case vol <= 4565:
+			host = "25"
+		case vol <= 4877:
+			host = "26"
+		case vol <= 5189:
+			host = "27"
+		case vol <= 5501:
+			host = "28"
+		case vol <= 5813:
+			host = "29"
+		case vol <= 6125:
+			host = "30"
+		case vol <= 6437:
+			host = "31"
+		case vol <= 6749:
+			host = "32"
+		case vol <= 7061:
+			host = "33"
+		case vol <= 7373:
+			host = "34"
+		case vol <= 7685:
+			host = "35"
+		case vol <= 7997:
+			host = "36"
+		case vol <= 8309:
+			host = "37"
+		default:
+			host = "38"
+		}
+
 		pic := fmt.Sprintf(
-			"https://basket-%d.wbbasket.ru/vol%d/part%d/%d/images/big/1.webp",
+			"https://basket-%s.wbbasket.ru/vol%d/part%d/%d/images/big/1.webp",
 			host, vol, part, id)
 
 		resp, err := http.Get(pic)

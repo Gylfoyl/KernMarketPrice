@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -64,9 +66,18 @@ func ozonResponse(query string) ([]byte, error) {
 		return nil, fmt.Errorf("[OZON] cookiejar:%w", err)
 	}
 	globalCookie = jar
+	wd, _ := os.Getwd()
+	path := filepath.Join(wd, "proxy.txt")
+	dat, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot read file proxy.txt: %v", err)
+	}
+	proxyURL, _ := url.Parse(string(dat))
+	transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
 
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Transport: transport,
+		Timeout:   15 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -91,7 +102,7 @@ func ozonResponse(query string) ([]byte, error) {
 		setHeaders(req, referer)
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("[OZON] client do: %w", err)
+			return nil, fmt.Errorf("[OZON] sending request err: %w", err)
 		}
 
 		if resp.StatusCode == 301 || resp.StatusCode == 302 || resp.StatusCode == 303 || resp.StatusCode == 307 || resp.StatusCode == 308 {
@@ -159,7 +170,7 @@ func normalizeText(s string) string {
 func Parse(query string) ([]models.Product, error) {
 	ozon, err := ozonResponse(query)
 	if err != nil {
-		return nil, fmt.Errorf("[OZON] ошибка сбора json OZON:%w", err)
+		return nil, fmt.Errorf("[OZON] json collection error:%w", err)
 	}
 
 	root := gjson.ParseBytes(ozon)
@@ -173,7 +184,7 @@ func Parse(query string) ([]models.Product, error) {
 		return true
 	})
 	if tileKey == "" {
-		return nil, fmt.Errorf("[OZON] tileGridDesktop-* not found")
+		return nil, fmt.Errorf("[OZON_parsing] tileGridDesktop-* not found")
 	}
 
 	tileStr := root.Get("widgetStates." + tileKey).String()
@@ -181,7 +192,7 @@ func Parse(query string) ([]models.Product, error) {
 
 	items := tile.Get("items")
 	if !items.Exists() || !items.IsArray() {
-		return nil, fmt.Errorf("[OZON] items not found or not array")
+		return nil, fmt.Errorf("[OZON_parsing] items not found or not array")
 	}
 
 	fmt.Println("items:", len(items.Array()))
@@ -257,14 +268,4 @@ func Parse(query string) ([]models.Product, error) {
 	})
 
 	return products, nil
-	// out, err := json.MarshalIndent(products, "", "    ")
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// err = os.WriteFile("PRODUCTS_DATA.json", out, 0644)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println("[+] Saved PRODUCTS_DATA.json:", len(products))
 }
